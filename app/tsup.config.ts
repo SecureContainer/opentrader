@@ -21,11 +21,29 @@ export default defineConfig({
   bundle: true,
   target: "esnext",
   treeshake: true,
-  external: [],
+  external: [], // No external dependencies - bundle everything
   env: {
     NODE_ENV: "production",
+    OPENTRADER_BUNDLED: "true", // Flag to indicate this is a bundled build
   },
-  noExternal: [/@opentrader/], // Include internal packages into the bundle
+  noExternal: [
+      /@opentrader/, 
+      "@prisma/client",
+     "commander",
+      "express",
+      "ccxt",
+      "@trpc/server",
+      "@trpc/client",
+      "zod",
+      "superjson",
+      "pino",
+      "pino-pretty",
+      "json5",
+      "execa",
+      "random-words"],
+  //noExternal: [/.*/], // Bundle ALL dependencies (both internal @opentrader packages and external npm packages)
+  platform: "node",
+  keepNames: true, // Preserve function names for better debugging
   outExtension: ({ format }) => {
     if (format === "esm") return { js: ".mjs" };
     if (format === "cjs") return { js: ".cjs" };
@@ -37,6 +55,11 @@ export default defineConfig({
         import { createRequire } from 'module';
 
         const require = createRequire(import.meta.url);
+        // Force Prisma to use bundled WASM
+	//
+        globalThis.process = globalThis.process || {};
+	globalThis.process.env = globalThis.process.env || {};
+	globalThis.process.env.PRISMA_QUERY_ENGINE_LIBRARY_TYPE = 'wasm';
 
         if (typeof globalThis.__dirname === "undefined") {
           globalThis.__dirname = new URL('.', import.meta.url).pathname;
@@ -45,6 +68,18 @@ export default defineConfig({
           globalThis.__filename = new URL(import.meta.url).pathname;
         }
       `,
+    };
+
+    // Define replacements for worker script paths
+    options.define = {
+      ...options.define,
+      'process.env.NODE_ENV': '"production"',
+    };
+
+    // Handle loader and worker script resolution
+    options.loader = {
+      ...options.loader,
+      '.node': 'copy',
     };
   },
   esbuildPlugins: [generatePackageJsonPlugin(), copyPrismaSchemaPlugin()],
